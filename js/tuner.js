@@ -416,7 +416,7 @@ function resetTunerDisplay() {
         centsEl.textContent = '--';
         centsEl.style.color = '';
     }
-    if (activeLabel) activeLabel.textContent = 'Играйте струну';
+    if (activeLabel) activeLabel.textContent = 'Play a string';
     if (gauge) {
         gauge.style.removeProperty('--tuning-color');
         gauge.style.borderColor = '';
