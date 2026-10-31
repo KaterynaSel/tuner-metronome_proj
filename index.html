@@ -24,7 +24,7 @@
   </header>
 
   <main class="site-main">
-    <section id="panel-tuner" class="panel" aria-label="Tuner">
+    <section id="panel-tuner" class="panel tuner--mic-off" aria-label="Tuner">
       <div class="tuner-display">
         <div class="tuner-mic-row">
           <button type="button" class="tuner-mic-btn" id="tuner-mic-btn" aria-pressed="false"
@@ -52,12 +52,14 @@
             Allow microphone access to tune your guitar
           </p>
         </div>
+        <div class="tuner-gauge-wrap">
         <div class="tuner-gauge" aria-hidden="true">
           <div class="tuner-gauge__scale"></div>
           <div id="tuner-needle" class="tuner-gauge__needle"></div>
         </div>
         <p class="tuner-cents"><span id="tuner-cents">--</span> ¢</p>
         <p class="tuner-note" id="tuner-active-string">Play a string</p>
+        </div>
         <div class="tuner-mode" role="group" aria-label="String detection mode">
           <button type="button" class="tuner-mode-btn active" id="tuner-mode-auto" data-mode="auto">Auto</button>
           <button type="button" class="tuner-mode-btn" id="tuner-mode-manual" data-mode="manual">Manual</button>

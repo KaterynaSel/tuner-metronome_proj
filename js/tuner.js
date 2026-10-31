@@ -56,6 +56,119 @@ const ATTACK_THRESHOLD = 0.01;
 let silenceStartTime = null;
 const SILENCE_TIMEOUT = 3000;
 
+// --- Display layer (smoothed UI only; detection unchanged) ---
+const DISPLAY_SMOOTH_ALPHA = 0.22;
+const CENTS_CLAMP = 50;
+const ROTATION_PER_CENT = 0.9;
+
+let targetCents = null;
+let displayCents = 0;
+/** @type {number | null} active string for gauge chrome */
+let displayVisualString = null;
+let displayLoopActive = false;
+let displayRafId = null;
+
+function resetDisplayPipelineState() {
+    targetCents = null;
+    displayCents = 0;
+    displayVisualString = null;
+}
+
+function setDisplayTarget(cents, stringNumber) {
+    targetCents = cents;
+    displayVisualString = stringNumber;
+}
+
+function applyNeedleTransform(rotationDeg) {
+    const needle = document.getElementById('tuner-needle');
+    if (!needle) return;
+    needle.style.transform = `translateX(-50%) rotate(${rotationDeg}deg)`;
+}
+
+function syncDisplayChromeFromSmoothedCents() {
+    if (targetCents === null) {
+        applyNeedleTransform(0);
+        return;
+    }
+
+    const cents = displayCents;
+    const tuningColor = getTuningColor(cents);
+    const clampedCents = Math.max(-CENTS_CLAMP, Math.min(CENTS_CLAMP, cents));
+    const rotation = clampedCents * ROTATION_PER_CENT;
+
+    applyNeedleTransform(rotation);
+
+    const needle = document.getElementById('tuner-needle');
+    const centsEl = document.getElementById('tuner-cents');
+    const activeLabel = document.getElementById('tuner-active-string');
+    const gauge = document.querySelector('.tuner-gauge');
+
+    if (needle) {
+        needle.style.background = `linear-gradient(180deg, ${tuningColor} 0%, ${lerpColor(tuningColor, '#000000', 0.35)} 100%)`;
+        needle.style.boxShadow = `0 0 16px ${tuningColor}99`;
+    }
+
+    if (centsEl && targetCents !== null) {
+        centsEl.textContent = cents > 0 ? `+${cents.toFixed(1)}` : cents.toFixed(1);
+        applyTuningColor(centsEl, tuningColor);
+    }
+
+    const stringNumber = displayVisualString;
+    if (activeLabel && stringNumber) {
+        activeLabel.textContent = STRING_LABELS[stringNumber] || '—';
+    }
+
+    if (gauge && targetCents !== null) {
+        gauge.style.setProperty('--tuning-color', tuningColor);
+        gauge.style.borderColor = `${tuningColor}66`;
+    }
+
+    if (stringNumber) {
+        document.querySelectorAll('.string-row').forEach((row) => {
+            const isActive = row.dataset.string === String(stringNumber);
+            row.classList.toggle('string-row--active', isActive);
+            if (isActive) {
+                row.style.borderColor = `${tuningColor}88`;
+                row.style.boxShadow = `0 0 0 1px ${tuningColor}40`;
+            } else {
+                row.style.borderColor = '';
+                row.style.boxShadow = '';
+            }
+        });
+    }
+
+    window.debugDisplay = { targetCents, displayCents, displayVisualString };
+}
+
+function tickDisplay() {
+    if (!displayLoopActive) return;
+
+    if (targetCents !== null) {
+        displayCents += (targetCents - displayCents) * DISPLAY_SMOOTH_ALPHA;
+        if (Math.abs(targetCents - displayCents) < 0.05) {
+            displayCents = targetCents;
+        }
+    }
+
+    syncDisplayChromeFromSmoothedCents();
+    displayRafId = requestAnimationFrame(tickDisplay);
+}
+
+function startDisplayLoop() {
+    if (displayLoopActive) return;
+    resetDisplayPipelineState();
+    displayLoopActive = true;
+    displayRafId = requestAnimationFrame(tickDisplay);
+}
+
+function stopDisplayLoop() {
+    displayLoopActive = false;
+    if (displayRafId !== null) {
+        cancelAnimationFrame(displayRafId);
+        displayRafId = null;
+    }
+}
+
 function initReferenceTones() {
     if (referenceTonesBound) return;
     referenceTonesBound = true;
@@ -193,6 +306,21 @@ function updateMicButtonUi(isActive) {
     btn.classList.toggle('tuner-mic-btn--active', isActive);
     btn.setAttribute('aria-pressed', String(isActive));
     btn.setAttribute('aria-label', isActive ? 'Turn microphone off' : 'Turn microphone on');
+
+    setTunerMicDependentUi(isActive);
+}
+
+function setTunerMicDependentUi(micActive) {
+    const panel = document.getElementById('panel-tuner');
+    panel?.classList.toggle('tuner--mic-off', !micActive);
+
+    document.querySelectorAll('.tuner-mode-btn').forEach((modeBtn) => {
+        modeBtn.disabled = !micActive;
+    });
+
+    document.querySelectorAll('.string-select-cb').forEach((cb) => {
+        cb.disabled = !micActive;
+    });
 }
 
 function showMicError(message = MIC_DENIED_MESSAGE) {
@@ -269,6 +397,7 @@ async function startTunerMicrophone() {
         analysisActive = true;
 
         const buffer = new Float32Array(analyser.fftSize);
+        startDisplayLoop();
         startAnalysisLoop(analyser, buffer, detectYIN, detectMacleod);
         updateMicButtonUi(true);
     } catch (error) {
@@ -290,6 +419,7 @@ async function startTunerMicrophone() {
 
 function stopTunerMicrophone() {
     analysisActive = false;
+    stopDisplayLoop();
 
     mediaStream?.getTracks().forEach((track) => {
         track.onended = null;
@@ -609,56 +739,19 @@ function applyTuningColor(element, color) {
 
 function updateTunerVisual(stringNumber, detectedHz, targetHz) {
     const cents = hzToCents(detectedHz, targetHz);
-    const tuningColor = getTuningColor(cents);
-    const needle = document.getElementById('tuner-needle');
-    const centsEl = document.getElementById('tuner-cents');
-    const activeLabel = document.getElementById('tuner-active-string');
-    const gauge = document.querySelector('.tuner-gauge');
-
-    const clampedCents = Math.max(-50, Math.min(50, cents));
-    const rotation = clampedCents * 0.9;
-
-    if (needle) {
-        needle.style.transform = `translateX(-50%) rotate(${rotation}deg)`;
-        needle.style.background = `linear-gradient(180deg, ${tuningColor} 0%, ${lerpColor(tuningColor, '#000000', 0.35)} 100%)`;
-        needle.style.boxShadow = `0 0 16px ${tuningColor}99`;
-    }
-
-    if (centsEl) {
-        centsEl.textContent = cents > 0 ? `+${cents.toFixed(1)}` : cents.toFixed(1);
-        applyTuningColor(centsEl, tuningColor);
-    }
-
-    if (activeLabel) {
-        activeLabel.textContent = STRING_LABELS[stringNumber] || '—';
-    }
-
-    if (gauge) {
-        gauge.style.setProperty('--tuning-color', tuningColor);
-        gauge.style.borderColor = `${tuningColor}66`;
-    }
-
-    document.querySelectorAll('.string-row').forEach((row) => {
-        const isActive = row.dataset.string === String(stringNumber);
-        row.classList.toggle('string-row--active', isActive);
-        if (isActive) {
-            row.style.borderColor = `${tuningColor}88`;
-            row.style.boxShadow = `0 0 0 1px ${tuningColor}40`;
-        } else {
-            row.style.borderColor = '';
-            row.style.boxShadow = '';
-        }
-    });
+    setDisplayTarget(cents, stringNumber);
 }
 
 function resetTunerDisplay() {
+    resetDisplayPipelineState();
+
     const needle = document.getElementById('tuner-needle');
     const centsEl = document.getElementById('tuner-cents');
     const activeLabel = document.getElementById('tuner-active-string');
     const gauge = document.querySelector('.tuner-gauge');
 
+    applyNeedleTransform(0);
     if (needle) {
-        needle.style.transform = 'translateX(-50%) rotate(0deg)';
         needle.style.background = '';
         needle.style.boxShadow = '';
     }
