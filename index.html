@@ -32,11 +32,19 @@
         </div>
         <p class="tuner-cents"><span id="tuner-cents">--</span> ¢</p>
         <p class="tuner-note" id="tuner-active-string">Play a string</p>
+        <div class="tuner-mode" role="group" aria-label="String detection mode">
+          <button type="button" class="tuner-mode-btn active" id="tuner-mode-auto" data-mode="auto">Auto</button>
+          <button type="button" class="tuner-mode-btn" id="tuner-mode-manual" data-mode="manual">Manual</button>
+        </div>
       </div>
 
-      <div class="string-list">
+      <div class="string-list" id="string-list">
         <article class="string-row" data-string="1">
           <div class="string-row__head">
+            <label class="string-row__select">
+              <input type="checkbox" class="string-select-cb" data-string="1" aria-label="Select string 1 E4" />
+              <span class="string-row__select-mark" aria-hidden="true"></span>
+            </label>
             <span class="string-row__label">1 · E4</span>
             <button type="button" class="btn btn--ghost string-btn" data-sound="/audio/string-1-e4.mp3">♪</button>
           </div>
@@ -47,6 +55,10 @@
         </article>
         <article class="string-row" data-string="2">
           <div class="string-row__head">
+            <label class="string-row__select">
+              <input type="checkbox" class="string-select-cb" data-string="2" aria-label="Select string 2 B3" />
+              <span class="string-row__select-mark" aria-hidden="true"></span>
+            </label>
             <span class="string-row__label">2 · B3</span>
             <button type="button" class="btn btn--ghost string-btn" data-sound="/audio/string-2-b3.mp3">♪</button>
           </div>
@@ -57,6 +69,10 @@
         </article>
         <article class="string-row" data-string="3">
           <div class="string-row__head">
+            <label class="string-row__select">
+              <input type="checkbox" class="string-select-cb" data-string="3" aria-label="Select string 3 G3" />
+              <span class="string-row__select-mark" aria-hidden="true"></span>
+            </label>
             <span class="string-row__label">3 · G3</span>
             <button type="button" class="btn btn--ghost string-btn" data-sound="/audio/string-3-g3.mp3">♪</button>
           </div>
@@ -67,6 +83,10 @@
         </article>
         <article class="string-row" data-string="4">
           <div class="string-row__head">
+            <label class="string-row__select">
+              <input type="checkbox" class="string-select-cb" data-string="4" aria-label="Select string 4 D3" />
+              <span class="string-row__select-mark" aria-hidden="true"></span>
+            </label>
             <span class="string-row__label">4 · D3</span>
             <button type="button" class="btn btn--ghost string-btn" data-sound="/audio/string-4-d3.mp3">♪</button>
           </div>
@@ -77,6 +97,10 @@
         </article>
         <article class="string-row" data-string="5">
           <div class="string-row__head">
+            <label class="string-row__select">
+              <input type="checkbox" class="string-select-cb" data-string="5" aria-label="Select string 5 A2" />
+              <span class="string-row__select-mark" aria-hidden="true"></span>
+            </label>
             <span class="string-row__label">5 · A2</span>
             <button type="button" class="btn btn--ghost string-btn" data-sound="/audio/string-5-a2.mp3">♪</button>
           </div>
@@ -87,6 +111,10 @@
         </article>
         <article class="string-row" data-string="6">
           <div class="string-row__head">
+            <label class="string-row__select">
+              <input type="checkbox" class="string-select-cb" data-string="6" aria-label="Select string 6 E2" />
+              <span class="string-row__select-mark" aria-hidden="true"></span>
+            </label>
             <span class="string-row__label">6 · E2</span>
             <button type="button" class="btn btn--ghost string-btn" data-sound="/audio/string-6-e2.mp3">♪</button>
           </div>

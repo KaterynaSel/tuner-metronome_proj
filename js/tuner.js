@@ -23,6 +23,12 @@ let currentAudio = null;
 let mediaStream = null;
 let audioContext = null;
 let referenceTonesBound = false;
+let stringModeBound = false;
+
+/** @type {'auto' | 'manual'} */
+let stringMode = 'auto';
+/** @type {number | null} 1–6 */
+let manualSelectedString = null;
 
 const pitchHistory = [];
 const MAX_HISTORY = 7;
@@ -63,8 +69,100 @@ function initReferenceTones() {
     });
 }
 
+function isManualStringMode() {
+    return stringMode === 'manual';
+}
+
+function applyManualSelectionHighlight() {
+    document.querySelectorAll('.string-row').forEach((row) => {
+        const n = Number(row.dataset.string);
+        row.classList.toggle(
+            'string-row--selected',
+            isManualStringMode() && manualSelectedString === n
+        );
+    });
+}
+
+function resetAutoStringLockState() {
+    currentString = null;
+    candidateString = null;
+    candidateCount = 0;
+    isAcquiring = false;
+    acquisitionPitches.length = 0;
+}
+
+function setStringMode(mode) {
+    stringMode = mode;
+    const list = document.getElementById('string-list');
+    const btnAuto = document.getElementById('tuner-mode-auto');
+    const btnManual = document.getElementById('tuner-mode-manual');
+
+    list?.classList.toggle('tuner--manual', mode === 'manual');
+    btnAuto?.classList.toggle('active', mode === 'auto');
+    btnManual?.classList.toggle('active', mode === 'manual');
+
+    if (mode === 'auto') {
+        document.querySelectorAll('.string-select-cb').forEach((cb) => {
+            cb.checked = false;
+        });
+        manualSelectedString = null;
+        resetAutoStringLockState();
+    }
+
+    applyManualSelectionHighlight();
+    if (mode === 'manual') {
+        updateManualModeIdleLabel();
+    } else {
+        const activeLabel = document.getElementById('tuner-active-string');
+        if (activeLabel) activeLabel.textContent = 'Play a string';
+    }
+}
+
+function updateManualModeIdleLabel() {
+    const activeLabel = document.getElementById('tuner-active-string');
+    if (!activeLabel || !isManualStringMode()) return;
+    if (manualSelectedString) {
+        activeLabel.textContent = STRING_LABELS[manualSelectedString] || '—';
+    } else {
+        activeLabel.textContent = 'Select a string';
+    }
+}
+
+function initStringModeControls() {
+    if (stringModeBound) return;
+    stringModeBound = true;
+
+    document.getElementById('tuner-mode-auto')?.addEventListener('click', () => setStringMode('auto'));
+    document.getElementById('tuner-mode-manual')?.addEventListener('click', () => setStringMode('manual'));
+
+    document.querySelectorAll('.string-select-cb').forEach((cb) => {
+        cb.addEventListener('change', () => {
+            if (!cb.checked) {
+                cb.checked = true;
+                return;
+            }
+
+            document.querySelectorAll('.string-select-cb').forEach((other) => {
+                if (other !== cb) other.checked = false;
+            });
+
+            manualSelectedString = Number(cb.dataset.string);
+            currentString = manualSelectedString;
+            candidateString = null;
+            candidateCount = 0;
+            pitchHistory.length = 0;
+            isAcquiring = false;
+            acquisitionPitches.length = 0;
+
+            applyManualSelectionHighlight();
+            updateManualModeIdleLabel();
+        });
+    });
+}
+
 export async function initTuner() {
     initReferenceTones();
+    initStringModeControls();
 
     try {
         mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -179,9 +277,13 @@ function startAnalysisLoop(analyser, buffer, detectYIN, detectMacleod) {
             if (silenceDuration >= SILENCE_TIMEOUT) {
                 clearHtmlFields();
                 resetTunerDisplay();
-                currentString = null;
-                candidateString = null;
-                candidateCount = 0;
+                if (isManualStringMode() && manualSelectedString) {
+                    currentString = manualSelectedString;
+                } else {
+                    currentString = null;
+                    candidateString = null;
+                    candidateCount = 0;
+                }
                 silenceStartTime = null;
             }
 
@@ -195,9 +297,15 @@ function startAnalysisLoop(analyser, buffer, detectYIN, detectMacleod) {
 
         if (rms > THRESHOLD && rmsDelta > ATTACK_THRESHOLD) {
             pitchHistory.length = 0;
-            currentString = null;
-            candidateString = null;
-            candidateCount = 0;
+            if (isManualStringMode() && manualSelectedString) {
+                currentString = manualSelectedString;
+                candidateString = null;
+                candidateCount = 0;
+            } else {
+                currentString = null;
+                candidateString = null;
+                candidateCount = 0;
+            }
             isAcquiring = true;
             acquisitionStartTime = Date.now();
             acquisitionPitches.length = 0;
@@ -207,8 +315,18 @@ function startAnalysisLoop(analyser, buffer, detectYIN, detectMacleod) {
 
         let pitch = detectPitchFused(buffer, detectYIN, detectMacleod);
 
-        if (pitch && currentString !== null) {
-            const lockedTargetHz = targetFrequencies[currentString];
+        if (isManualStringMode() && !manualSelectedString) {
+            requestAnimationFrame(updatePitch);
+            return;
+        }
+
+        const lockString =
+            isManualStringMode() && manualSelectedString
+                ? manualSelectedString
+                : currentString;
+
+        if (pitch && lockString !== null) {
+            const lockedTargetHz = targetFrequencies[lockString];
             pitch = snapToTargetOctave(pitch, lockedTargetHz);
 
             if (!isInStringRange(pitch, lockedTargetHz)) {
@@ -238,30 +356,38 @@ function startAnalysisLoop(analyser, buffer, detectYIN, detectMacleod) {
                 }
 
                 const acquisitionPitch = getMedian(acquisitionPitches);
-                currentString = Number(findClosestString(acquisitionPitch));
+                if (isManualStringMode() && manualSelectedString) {
+                    currentString = manualSelectedString;
+                } else {
+                    currentString = Number(findClosestString(acquisitionPitch));
+                }
                 isAcquiring = false;
             }
 
-            const detectedString = findClosestString(stablePitch);
+            if (isManualStringMode() && manualSelectedString) {
+                currentString = manualSelectedString;
+            } else {
+                const detectedString = findClosestString(stablePitch);
 
-            if (currentString === null) {
-                currentString = detectedString;
-            } else if (detectedString !== currentString) {
-                if (candidateString === detectedString) {
-                    candidateCount++;
-                } else {
-                    candidateString = detectedString;
-                    candidateCount = 1;
-                }
-
-                if (candidateCount >= SWITCH_THRESHOLD) {
+                if (currentString === null) {
                     currentString = detectedString;
+                } else if (detectedString !== currentString) {
+                    if (candidateString === detectedString) {
+                        candidateCount++;
+                    } else {
+                        candidateString = detectedString;
+                        candidateCount = 1;
+                    }
+
+                    if (candidateCount >= SWITCH_THRESHOLD) {
+                        currentString = detectedString;
+                        candidateString = null;
+                        candidateCount = 0;
+                    }
+                } else {
                     candidateString = null;
                     candidateCount = 0;
                 }
-            } else {
-                candidateString = null;
-                candidateCount = 0;
             }
 
             const targetHz = targetFrequencies[currentString];
@@ -270,8 +396,9 @@ function startAnalysisLoop(analyser, buffer, detectYIN, detectMacleod) {
             window.debugTuner = {
                 stablePitch,
                 displayPitch,
-                detectedString,
                 currentString,
+                stringMode,
+                manualSelectedString,
                 candidateString,
                 candidateCount
             };
@@ -416,7 +543,15 @@ function resetTunerDisplay() {
         centsEl.textContent = '--';
         centsEl.style.color = '';
     }
-    if (activeLabel) activeLabel.textContent = 'Play a string';
+    if (activeLabel) {
+        if (isManualStringMode()) {
+            activeLabel.textContent = manualSelectedString
+                ? (STRING_LABELS[manualSelectedString] || '—')
+                : 'Select a string';
+        } else {
+            activeLabel.textContent = 'Play a string';
+        }
+    }
     if (gauge) {
         gauge.style.removeProperty('--tuning-color');
         gauge.style.borderColor = '';
@@ -424,9 +559,13 @@ function resetTunerDisplay() {
 
     document.querySelectorAll('.string-row').forEach((row) => {
         row.classList.remove('string-row--active');
-        row.style.borderColor = '';
-        row.style.boxShadow = '';
+        if (!row.classList.contains('string-row--selected')) {
+            row.style.borderColor = '';
+            row.style.boxShadow = '';
+        }
     });
+
+    applyManualSelectionHighlight();
 }
 
 function updateHtmlFields(stringNumber, detectedHz, targetHz) {
