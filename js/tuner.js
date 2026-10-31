@@ -24,6 +24,11 @@ let mediaStream = null;
 let audioContext = null;
 let referenceTonesBound = false;
 let stringModeBound = false;
+let micButtonBound = false;
+let analysisActive = false;
+let micStarting = false;
+
+const MIC_DENIED_MESSAGE = 'Allow microphone access to tune your guitar';
 
 /** @type {'auto' | 'manual'} */
 let stringMode = 'auto';
@@ -160,14 +165,86 @@ function initStringModeControls() {
     });
 }
 
-export async function initTuner() {
-    initReferenceTones();
-    initStringModeControls();
+function setMicButtonBusy(busy) {
+    const btn = document.getElementById('tuner-mic-btn');
+    if (!btn) return;
+    btn.disabled = busy;
+    btn.setAttribute('aria-busy', String(busy));
+}
+
+function attachMicStreamListeners(stream) {
+    stream.getAudioTracks().forEach((track) => {
+        track.onended = () => {
+            if (mediaStream === stream) {
+                stopTunerMicrophone();
+            }
+        };
+    });
+}
+
+function isMicActive() {
+    return Boolean(mediaStream && mediaStream.active);
+}
+
+function updateMicButtonUi(isActive) {
+    const btn = document.getElementById('tuner-mic-btn');
+    if (!btn) return;
+
+    btn.classList.toggle('tuner-mic-btn--active', isActive);
+    btn.setAttribute('aria-pressed', String(isActive));
+    btn.setAttribute('aria-label', isActive ? 'Turn microphone off' : 'Turn microphone on');
+
+    const iconOff = btn.querySelector('.tuner-mic-btn__icon--off');
+    const iconOn = btn.querySelector('.tuner-mic-btn__icon--on');
+    if (iconOff) iconOff.hidden = isActive;
+    if (iconOn) iconOn.hidden = !isActive;
+}
+
+function showMicError(message = MIC_DENIED_MESSAGE) {
+    const el = document.getElementById('tuner-mic-error');
+    if (el) {
+        el.textContent = message;
+        el.hidden = false;
+    }
+}
+
+function hideMicError() {
+    const el = document.getElementById('tuner-mic-error');
+    if (el) el.hidden = true;
+}
+
+function resetPitchPipelineState() {
+    pitchHistory.length = 0;
+    previousRMS = 0;
+    silenceStartTime = null;
+    isAcquiring = false;
+    acquisitionPitches.length = 0;
+
+    if (isManualStringMode() && manualSelectedString) {
+        currentString = manualSelectedString;
+        candidateString = null;
+        candidateCount = 0;
+    } else {
+        currentString = null;
+        candidateString = null;
+        candidateCount = 0;
+    }
+}
+
+async function startTunerMicrophone() {
+    if (micStarting || isMicActive()) return;
+
+    micStarting = true;
+    setMicButtonBusy(true);
+    hideMicError();
 
     try {
         mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
+        attachMicStreamListeners(mediaStream);
         audioContext = new AudioContext();
+        if (audioContext.state === 'suspended') {
+            await audioContext.resume();
+        }
 
         const detectYIN = YIN({
             sampleRate: audioContext.sampleRate,
@@ -193,15 +270,36 @@ export async function initTuner() {
         source.connect(lowPass);
         lowPass.connect(analyser);
 
+        resetPitchPipelineState();
+        analysisActive = true;
+
         const buffer = new Float32Array(analyser.fftSize);
         startAnalysisLoop(analyser, buffer, detectYIN, detectMacleod);
+        updateMicButtonUi(true);
     } catch (error) {
         console.error('error with micro', error);
+        mediaStream?.getTracks().forEach((track) => track.stop());
+        mediaStream = null;
+        if (audioContext) {
+            audioContext.close();
+            audioContext = null;
+        }
+        analysisActive = false;
+        showMicError();
+        updateMicButtonUi(false);
+    } finally {
+        micStarting = false;
+        setMicButtonBusy(false);
     }
 }
 
-export function destroyTuner() {
-    mediaStream?.getTracks().forEach((track) => track.stop());
+function stopTunerMicrophone() {
+    analysisActive = false;
+
+    mediaStream?.getTracks().forEach((track) => {
+        track.onended = null;
+        track.stop();
+    });
     mediaStream = null;
 
     if (audioContext) {
@@ -209,13 +307,43 @@ export function destroyTuner() {
         audioContext = null;
     }
 
+    resetPitchPipelineState();
+    clearHtmlFields();
+    resetTunerDisplay();
+    updateMicButtonUi(false);
+    setMicButtonBusy(false);
+}
+
+function initMicButton() {
+    if (micButtonBound) return;
+    micButtonBound = true;
+
+    document.getElementById('tuner-mic-btn')?.addEventListener('click', () => {
+        if (micStarting) return;
+        if (isMicActive()) {
+            stopTunerMicrophone();
+        } else {
+            startTunerMicrophone();
+        }
+    });
+}
+
+export function initTuner() {
+    initReferenceTones();
+    initStringModeControls();
+    initMicButton();
+    updateMicButtonUi(false);
+    hideMicError();
+}
+
+export function destroyTuner() {
+    stopTunerMicrophone();
+    hideMicError();
+
     if (currentAudio) {
         currentAudio.pause();
         currentAudio = null;
     }
-
-    clearHtmlFields();
-    resetTunerDisplay();
 }
 
 function getRMS(buffer) {
@@ -262,7 +390,7 @@ function detectPitchFused(buffer, detectYIN, detectMacleod) {
 
 function startAnalysisLoop(analyser, buffer, detectYIN, detectMacleod) {
     function updatePitch() {
-        if (!audioContext) return;
+        if (!analysisActive || !audioContext) return;
 
         analyser.getFloatTimeDomainData(buffer);
         const rms = getRMS(buffer);

@@ -26,6 +26,32 @@
   <main class="site-main">
     <section id="panel-tuner" class="panel" aria-label="Tuner">
       <div class="tuner-display">
+        <div class="tuner-mic-row">
+          <button type="button" class="tuner-mic-btn" id="tuner-mic-btn" aria-pressed="false"
+            aria-label="Turn microphone on">
+            <svg class="tuner-mic-btn__icon tuner-mic-btn__icon--off" viewBox="0 0 24 24" width="32" height="32"
+              aria-hidden="true">
+              <rect x="8" y="2" width="8" height="12" rx="4" fill="currentColor" />
+              <path d="M5 11.5a7 7 0 0 0 14 0" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" />
+              <path d="M12 18.5v2.5M8 21h8" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" />
+              <path d="M4.5 4.5l15 15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
+            </svg>
+            <svg class="tuner-mic-btn__icon tuner-mic-btn__icon--on" viewBox="0 0 24 24" width="32" height="32"
+              aria-hidden="true" hidden>
+              <rect x="8" y="2" width="8" height="12" rx="4" fill="currentColor" />
+              <path d="M5 11.5a7 7 0 0 0 14 0" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" />
+              <path d="M12 18.5v2.5M8 21h8" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" />
+              <circle cx="18" cy="6" r="2.25" fill="currentColor" opacity="0.95" />
+            </svg>
+          </button>
+          <p class="tuner-mic-error" id="tuner-mic-error" role="alert" hidden>
+            Allow microphone access to tune your guitar
+          </p>
+        </div>
         <div class="tuner-gauge" aria-hidden="true">
           <div class="tuner-gauge__scale"></div>
           <div id="tuner-needle" class="tuner-gauge__needle"></div>

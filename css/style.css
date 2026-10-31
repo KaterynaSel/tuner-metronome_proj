@@ -104,6 +104,63 @@ body {
   margin-bottom: 20px;
 }
 
+.tuner-mic-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.tuner-mic-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  padding: 0;
+  border: 2px solid var(--danger);
+  border-radius: 50%;
+  background: rgba(255, 92, 108, 0.1);
+  color: #ff8a96;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.tuner-mic-btn--active {
+  border-color: var(--accent);
+  background: rgba(61, 255, 154, 0.14);
+  color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(61, 255, 154, 0.35), 0 0 22px rgba(61, 255, 154, 0.4);
+}
+
+.tuner-mic-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.tuner-mic-btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.tuner-mic-btn__icon--on[hidden],
+.tuner-mic-btn__icon--off[hidden] {
+  display: none;
+}
+
+.tuner-mic-error {
+  margin: 0;
+  max-width: 280px;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  color: var(--danger, #ff5c6c);
+}
+
+.tuner-mic-error[hidden] {
+  display: none;
+}
+
 .tuner-gauge {
   position: relative;
   width: min(100%, 280px);

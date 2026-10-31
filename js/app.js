@@ -1,8 +1,9 @@
 import { initTuner, destroyTuner } from './tuner.js';
-import { initMetronome } from './metronome.js';
+import { initMetronome, destroyMetronome } from './metronome.js';
 
 let activePanel = 'tuner';
 let tunerActive = false;
+let metronomeActive = false;
 
 const panels = {
     tuner: document.getElementById('panel-tuner'),
@@ -21,13 +22,23 @@ function setPanel(name) {
     });
 
     if (name === 'tuner') {
+        if (metronomeActive) {
+            destroyMetronome();
+            metronomeActive = false;
+        }
         if (!tunerActive) {
             initTuner();
             tunerActive = true;
         }
-    } else if (tunerActive) {
-        destroyTuner();
-        tunerActive = false;
+    } else if (name === 'metronome') {
+        if (tunerActive) {
+            destroyTuner();
+            tunerActive = false;
+        }
+        if (!metronomeActive) {
+            initMetronome();
+            metronomeActive = true;
+        }
     }
 }
 
@@ -40,7 +51,6 @@ document.querySelectorAll('.nav-btn').forEach((btn) => {
     });
 });
 
-initMetronome();
 setPanel('tuner');
 
 if ('serviceWorker' in navigator) {
