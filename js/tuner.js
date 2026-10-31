@@ -60,6 +60,7 @@ const SILENCE_TIMEOUT = 3000;
 const DISPLAY_SMOOTH_ALPHA = 0.22;
 const CENTS_CLAMP = 50;
 const ROTATION_PER_CENT = 0.9;
+const SILENCE_RETURN_MS = 500;
 
 let targetCents = null;
 let displayCents = 0;
@@ -68,13 +69,33 @@ let displayVisualString = null;
 let displayLoopActive = false;
 let displayRafId = null;
 
+let isNeedleReturning = false;
+let returnAnimStart = 0;
+let returnFromCents = 0;
+/** After SILENCE_TIMEOUT, UI reset runs once until sound returns */
+let silenceUiResetDone = false;
+
+function easeOutCubic(t) {
+    return 1 - (1 - t) ** 3;
+}
+
 function resetDisplayPipelineState() {
     targetCents = null;
     displayCents = 0;
     displayVisualString = null;
+    isNeedleReturning = false;
+    returnAnimStart = 0;
+    returnFromCents = 0;
+}
+
+function cancelNeedleReturn() {
+    isNeedleReturning = false;
+    returnAnimStart = 0;
+    returnFromCents = 0;
 }
 
 function setDisplayTarget(cents, stringNumber) {
+    cancelNeedleReturn();
     targetCents = cents;
     displayVisualString = stringNumber;
 }
@@ -86,7 +107,7 @@ function applyNeedleTransform(rotationDeg) {
 }
 
 function syncDisplayChromeFromSmoothedCents() {
-    if (targetCents === null) {
+    if (targetCents === null && !isNeedleReturning) {
         applyNeedleTransform(0);
         return;
     }
@@ -108,22 +129,22 @@ function syncDisplayChromeFromSmoothedCents() {
         needle.style.boxShadow = `0 0 16px ${tuningColor}99`;
     }
 
-    if (centsEl && targetCents !== null) {
+    if (centsEl && (targetCents !== null || isNeedleReturning)) {
         centsEl.textContent = cents > 0 ? `+${cents.toFixed(1)}` : cents.toFixed(1);
         applyTuningColor(centsEl, tuningColor);
     }
 
     const stringNumber = displayVisualString;
-    if (activeLabel && stringNumber) {
+    if (activeLabel && stringNumber && !isNeedleReturning) {
         activeLabel.textContent = STRING_LABELS[stringNumber] || '—';
     }
 
-    if (gauge && targetCents !== null) {
+    if (gauge && (targetCents !== null || isNeedleReturning)) {
         gauge.style.setProperty('--tuning-color', tuningColor);
         gauge.style.borderColor = `${tuningColor}66`;
     }
 
-    if (stringNumber) {
+    if (stringNumber && !isNeedleReturning) {
         document.querySelectorAll('.string-row').forEach((row) => {
             const isActive = row.dataset.string === String(stringNumber);
             row.classList.toggle('string-row--active', isActive);
@@ -137,20 +158,55 @@ function syncDisplayChromeFromSmoothedCents() {
         });
     }
 
-    window.debugDisplay = { targetCents, displayCents, displayVisualString };
+    window.debugDisplay = {
+        targetCents,
+        displayCents,
+        displayVisualString,
+        isNeedleReturning,
+    };
+}
+
+function onNeedleReturnComplete() {
+    isNeedleReturning = false;
+    displayCents = 0;
+    resetTunerDisplayChrome();
+}
+
+function startNeedleReturn() {
+    if (isNeedleReturning) return;
+
+    if (targetCents === null && Math.abs(displayCents) < 0.05) {
+        resetTunerDisplayChrome();
+        return;
+    }
+
+    targetCents = null;
+    returnFromCents = displayCents;
+    returnAnimStart = performance.now();
+    isNeedleReturning = true;
 }
 
 function tickDisplay() {
     if (!displayLoopActive) return;
 
-    if (targetCents !== null) {
+    if (isNeedleReturning) {
+        const elapsed = performance.now() - returnAnimStart;
+        const t = Math.min(1, elapsed / SILENCE_RETURN_MS);
+        displayCents = returnFromCents * (1 - easeOutCubic(t));
+        syncDisplayChromeFromSmoothedCents();
+        if (t >= 1) {
+            onNeedleReturnComplete();
+        }
+    } else if (targetCents !== null) {
         displayCents += (targetCents - displayCents) * DISPLAY_SMOOTH_ALPHA;
         if (Math.abs(targetCents - displayCents) < 0.05) {
             displayCents = targetCents;
         }
+        syncDisplayChromeFromSmoothedCents();
+    } else {
+        syncDisplayChromeFromSmoothedCents();
     }
 
-    syncDisplayChromeFromSmoothedCents();
     displayRafId = requestAnimationFrame(tickDisplay);
 }
 
@@ -340,6 +396,7 @@ function resetPitchPipelineState() {
     pitchHistory.length = 0;
     previousRMS = 0;
     silenceStartTime = null;
+    silenceUiResetDone = false;
     isAcquiring = false;
     acquisitionPitches.length = 0;
 
@@ -419,6 +476,7 @@ async function startTunerMicrophone() {
 
 function stopTunerMicrophone() {
     analysisActive = false;
+    cancelNeedleReturn();
     stopDisplayLoop();
 
     mediaStream?.getTracks().forEach((track) => {
@@ -434,7 +492,7 @@ function stopTunerMicrophone() {
 
     resetPitchPipelineState();
     clearHtmlFields();
-    resetTunerDisplay();
+    resetTunerDisplayImmediate();
     updateMicButtonUi(false);
     setMicButtonBusy(false);
 }
@@ -527,9 +585,9 @@ function startAnalysisLoop(analyser, buffer, detectYIN, detectMacleod) {
 
             const silenceDuration = Date.now() - silenceStartTime;
 
-            if (silenceDuration >= SILENCE_TIMEOUT) {
+            if (silenceDuration >= SILENCE_TIMEOUT && !silenceUiResetDone) {
+                silenceUiResetDone = true;
                 clearHtmlFields();
-                resetTunerDisplay();
                 if (isManualStringMode() && manualSelectedString) {
                     currentString = manualSelectedString;
                 } else {
@@ -537,7 +595,7 @@ function startAnalysisLoop(analyser, buffer, detectYIN, detectMacleod) {
                     candidateString = null;
                     candidateCount = 0;
                 }
-                silenceStartTime = null;
+                startNeedleReturn();
             }
 
             requestAnimationFrame(updatePitch);
@@ -545,6 +603,8 @@ function startAnalysisLoop(analyser, buffer, detectYIN, detectMacleod) {
         }
 
         silenceStartTime = null;
+        silenceUiResetDone = false;
+        cancelNeedleReturn();
 
         const rmsDelta = rms - previousRMS;
 
@@ -742,7 +802,7 @@ function updateTunerVisual(stringNumber, detectedHz, targetHz) {
     setDisplayTarget(cents, stringNumber);
 }
 
-function resetTunerDisplay() {
+function resetTunerDisplayChrome() {
     resetDisplayPipelineState();
 
     const needle = document.getElementById('tuner-needle');
@@ -782,6 +842,11 @@ function resetTunerDisplay() {
     });
 
     applyManualSelectionHighlight();
+}
+
+function resetTunerDisplayImmediate() {
+    cancelNeedleReturn();
+    resetTunerDisplayChrome();
 }
 
 function updateHtmlFields(stringNumber, detectedHz, targetHz) {
