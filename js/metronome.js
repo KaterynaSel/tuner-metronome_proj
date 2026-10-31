@@ -10,7 +10,10 @@ const timeSignatures = {
     '2/4': { beatsPerMeasure: 2, strongBeats: [0] },
     '3/4': { beatsPerMeasure: 3, strongBeats: [0] },
     '4/4': { beatsPerMeasure: 4, strongBeats: [0] },
+    '5/4': { beatsPerMeasure: 5, strongBeats: [0] },
     '6/8': { beatsPerMeasure: 6, strongBeats: [0] },
+    // 7/8 as 3+2+2 — accent first beat of each group
+    '7/8': { beatsPerMeasure: 7, strongBeats: [0, 3, 5] },
 };
 
 function playClick(time, beatIndex) {
