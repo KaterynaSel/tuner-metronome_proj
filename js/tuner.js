@@ -193,11 +193,6 @@ function updateMicButtonUi(isActive) {
     btn.classList.toggle('tuner-mic-btn--active', isActive);
     btn.setAttribute('aria-pressed', String(isActive));
     btn.setAttribute('aria-label', isActive ? 'Turn microphone off' : 'Turn microphone on');
-
-    const iconOff = btn.querySelector('.tuner-mic-btn__icon--off');
-    const iconOn = btn.querySelector('.tuner-mic-btn__icon--on');
-    if (iconOff) iconOff.hidden = isActive;
-    if (iconOn) iconOn.hidden = !isActive;
 }
 
 function showMicError(message = MIC_DENIED_MESSAGE) {

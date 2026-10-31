@@ -144,9 +144,21 @@ body {
   cursor: wait;
 }
 
-.tuner-mic-btn__icon--on[hidden],
-.tuner-mic-btn__icon--off[hidden] {
+.tuner-mic-btn__icon {
+  display: block;
+  flex-shrink: 0;
+}
+
+.tuner-mic-btn .tuner-mic-btn__icon--on {
   display: none;
+}
+
+.tuner-mic-btn--active .tuner-mic-btn__icon--off {
+  display: none;
+}
+
+.tuner-mic-btn--active .tuner-mic-btn__icon--on {
+  display: block;
 }
 
 .tuner-mic-error {
